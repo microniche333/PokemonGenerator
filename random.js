@@ -18,7 +18,7 @@ function generateRandom() {
 				var html = htmlifyPokemonArray(generatedPokemon, options);
 				results.innerHTML = html;
 			} else {
-				results.innerHTML = "An error occurred while generating Pokémon.";
+				results.innerHTML = "An error occurred while generating Pok&eacute;mon.";
 			}
 			markLoading(false);
 		}
@@ -31,7 +31,7 @@ function markLoading(isLoading) {
 
 function getOptions() {
 	return {
-		n: Number(document.getElementById("n").value),
+		n: parseInt(document.getElementById("n").value),
 		region: document.getElementById("region").value,
 		type: document.getElementById("type").value,
 		ubers: document.getElementById("ubers").checked,
@@ -43,14 +43,48 @@ function getOptions() {
 }
 
 function setOptions(options) {
-	document.getElementById("n").value = options.n;
-	document.getElementById("region").value = options.region;
-	document.getElementById("type").value = options.type;
-	document.getElementById("ubers").checked = options.ubers;
-	document.getElementById("nfes").checked = options.nfes;
-	document.getElementById("sprites").checked = options.sprites;
-	document.getElementById("natures").checked = options.natures;
-	document.getElementById("forms").checked = options.forms;
+	if ("n" in options) {
+		setDropdownIfValid("n", parseInt(options.n));
+	}
+	if ("region" in options) {
+		setDropdownIfValid("region", options.region);
+	}
+	if ("type" in options) {
+		setDropdownIfValid("type", options.type);
+	}
+	if ("ubers" in options) {
+		document.getElementById("ubers").checked = parseBoolean(options.ubers);
+	}
+	if ("nfes" in options) {
+		document.getElementById("nfes").checked = parseBoolean(options.nfes);
+	}
+	if ("sprites" in options) {
+		document.getElementById("sprites").checked = parseBoolean(options.sprites);
+	}
+	if ("natures" in options) {
+		document.getElementById("natures").checked = parseBoolean(options.natures);
+	}
+	if ("forms" in options) {
+		document.getElementById("forms").checked = parseBoolean(options.forms);
+	}
+	if ("generate" in options) {
+		generateRandom();
+	}
+}
+
+function setDropdownIfValid(selectID, value) {
+	const select = document.getElementById(selectID);
+	const option = select.querySelector("[value='" + value + "']");
+	if (option) {
+		select.value = option.value;
+	}
+}
+
+function parseBoolean(boolean) {
+	if (typeof boolean == "string") {
+		return boolean.toLowerCase() == "true";
+	}
+	return !!boolean;
 }
 
 // Cache the results of getEligiblePokemon by options.
@@ -182,24 +216,26 @@ function htmlifyPokemon(pokemon, options) {
 	var shiny = Math.floor(Math.random() * 65536) < 16;
 
 	var title = (shiny ? "Shiny " : "") + pokemon.name;
-
-	var out;
-	if (options.sprites) {
-		out = '<li title="' + title + '">';
-	} else {
-		out = '<li class="imageless">';
+	var classes = "";
+	if (shiny) {
+		classes += "shiny ";
 	}
+	if (!options.sprites) {
+		classes += "imageless ";
+	}
+
+	var out = '<li title="' + title + '" class="' + classes + '">';
 
 	if (options.natures) {
 		out += '<span class="nature">' + generateNature() + "</span> ";
 	}
 	out += pokemon.name;
 	if (shiny) {
-		out += ' <span class="shiny">&#9733;</span>';
+		out += ' <span class="star">&#9733;</span>';
 	}
 	if (options.sprites) {
 		var sprite = getSpritePath(pokemon, shiny);
-		out += '<div class="wrapper"><img src="' + sprite + '" alt="' + title + '" title="' + title + '" /></div>';
+		out += ' <img src="' + sprite + '" alt="' + title + '" title="' + title + '" />';
 	}
 
 	out += "</li>";
@@ -247,16 +283,56 @@ function randomInteger(maxExclusive) {
 
 const STORAGE_OPTIONS_KEY = "options";
 
+/** Stores the current options in local storage and in the URL. */
 function persistOptions(options) {
 	var optionsJson = JSON.stringify(options);
 	window.localStorage.setItem(STORAGE_OPTIONS_KEY, optionsJson);
+
+	window.history.replaceState({}, "", "?" + convertOptionsToUrlParams(options));
 }
 
+/** Loads options from either the URL or local storage. */
 function loadOptions() {
-	var optionsJson = window.localStorage.getItem(STORAGE_OPTIONS_KEY);
-	if (optionsJson) {
-		setOptions(JSON.parse(optionsJson));
+	if (urlHasOptions()) {
+		setOptions(convertUrlParamsToOptions());
+	} else {
+		var optionsJson = window.localStorage.getItem(STORAGE_OPTIONS_KEY);
+		if (optionsJson) {
+			setOptions(JSON.parse(optionsJson));
+		}
 	}
+}
+
+/** Returns whether or not the URL specifies any options as parameters. */
+function urlHasOptions() {
+	const questionIndex = window.location.href.indexOf("?");
+	return questionIndex >= 0 && questionIndex + 1 < window.location.href.length;
+}
+
+/** Parses options from the URL parameters. */
+function convertUrlParamsToOptions() {
+	const questionIndex = window.location.href.indexOf("?");
+	const paramString = window.location.href.substring(questionIndex + 1);
+	const options = {};
+	const parameterPairs = paramString.split("&");
+	for (let i=0; i<parameterPairs.length; i++) { // woo IE
+		const splitParam = parameterPairs[i].split("=");
+		const key = decodeURIComponent(splitParam[0]);
+		const value = splitParam[1];
+		if (value) {
+			options[key] = decodeURIComponent(value);
+		} else {
+			options[key] = null;
+		}
+	}
+	return options;
+}
+
+/** Returns URL parameters for the given settings, excluding the leading "?". */
+function convertOptionsToUrlParams(options) {
+	return Object.keys(options).map(function(key) {
+		return encodeURIComponent(key) + "=" + encodeURIComponent(options[key])
+	}).join("&");
 }
 
 document.addEventListener("DOMContentLoaded", loadOptions);
